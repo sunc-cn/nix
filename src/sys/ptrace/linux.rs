@@ -4,7 +4,7 @@ use cfg_if::cfg_if;
 use std::{mem, ptr};
 use crate::{Error, Result};
 use crate::errno::Errno;
-use libc::{self, c_void, c_long, siginfo_t};
+use libc::{self, c_void, c_long, siginfo_t,iovec};
 use crate::unistd::Pid;
 use crate::sys::signal::Signal;
 
@@ -212,6 +212,15 @@ pub fn setregs(pid: Pid, regs: user_regs_struct) -> Result<()> {
     };
     Errno::result(res).map(drop)
 }
+///
+/// Get user registers, as with `ptrace(PTRACE_GETREGS, ...)`
+#[cfg(all(
+    target_os = "linux",
+    any(all(target_arch = "aarch64", target_env = "gnu"))
+))]
+pub fn getregs(pid: Pid) -> Result<user_regs_struct> {
+    ptrace_get_data_v2(Request::PTRACE_GETREGSET, pid)
+}
 
 /// Function for ptrace requests that return values from the data field.
 /// Some ptrace get requests populate structs or larger elements than `c_long`
@@ -223,6 +232,27 @@ fn ptrace_get_data<T>(request: Request, pid: Pid) -> Result<T> {
         libc::ptrace(request as RequestType,
                      libc::pid_t::from(pid),
                      ptr::null_mut::<T>(),
+                     data.as_mut_ptr() as *const _ as *const c_void)
+    };
+    Errno::result(res)?;
+    Ok(unsafe{ data.assume_init() })
+}
+
+/// Function for ptrace requests that return values from the data field.
+/// Some ptrace get requests populate structs or larger elements than `c_long`
+/// and therefore use the data field to return values. This function handles these
+/// requests.
+fn ptrace_get_data_v2(request: Request, pid: Pid) -> Result<T> {
+    let mut res = Box::new(user_regs_struct{});
+    let mut data = Box::new(iovec{
+        iov_base:res, 
+        iov_len:std::mem::size_of(res),
+    });
+    let regset = 1;
+    let res = unsafe {
+        libc::ptrace(request as RequestType,
+                     libc::pid_t::from(pid),
+                     ptr::null_mut::<T>(regset),
                      data.as_mut_ptr() as *const _ as *const c_void)
     };
     Errno::result(res)?;
