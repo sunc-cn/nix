@@ -245,8 +245,8 @@ fn ptrace_get_data<T>(request: Request, pid: Pid) -> Result<T> {
 fn ptrace_get_data_v2<T>(request: Request, pid: Pid) -> Result<T> {
     let mut res = Box::new(user_regs_struct{});
     let mut data = Box::new(iovec{
-        iov_base:res, 
-        iov_len:std::mem::size_of(res),
+        iov_base:*res, 
+        iov_len:std::mem::size_of<user_regs_struct>(),
     });
     let regset = 1;
     let res = unsafe {
@@ -255,8 +255,7 @@ fn ptrace_get_data_v2<T>(request: Request, pid: Pid) -> Result<T> {
                      ptr::null_mut::<T>(regset),
                      data.as_mut_ptr() as *const _ as *const c_void)
     };
-    Errno::result(res)?;
-    Ok(unsafe{ data.assume_init() })
+    Errno::result(*res)?;
 }
 
 unsafe fn ptrace_other(request: Request, pid: Pid, addr: AddressType, data: *mut c_void) -> Result<c_long> {
