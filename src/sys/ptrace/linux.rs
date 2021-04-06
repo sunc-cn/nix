@@ -219,7 +219,7 @@ pub fn setregs(pid: Pid, regs: user_regs_struct) -> Result<()> {
     any(all(target_arch = "aarch64", target_env = "gnu"))
 ))]
 pub fn getregs(pid: Pid) -> Result<user_regs_struct> {
-    ptrace_get_data_v2(Request::PTRACE_GETREGSET, pid)
+    ptrace_get_data_v2<T>(Request::PTRACE_GETREGSET, pid)
 }
 
 /// Function for ptrace requests that return values from the data field.
@@ -242,7 +242,7 @@ fn ptrace_get_data<T>(request: Request, pid: Pid) -> Result<T> {
 /// Some ptrace get requests populate structs or larger elements than `c_long`
 /// and therefore use the data field to return values. This function handles these
 /// requests.
-fn ptrace_get_data_v2(request: Request, pid: Pid) -> Result<T> {
+fn ptrace_get_data_v2<T>(request: Request, pid: Pid) -> Result<T> {
     let mut res = Box::new(user_regs_struct{});
     let mut data = Box::new(iovec{
         iov_base:res, 
